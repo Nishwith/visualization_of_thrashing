@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OS Lab: Visualization of Thrashing</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-body: #f1f5f9;
+      --bg-panel: #ffffff;
+      --border: #cbd5e1;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --warning: #d97706;
+      --rad: 6px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: var(--bg-panel);
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    header h1 {
+      font-size: 1.25rem;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    #dashboard {
+      display: grid;
+      grid-template-columns: 300px 1fr 320px;
+      gap: 16px;
+      padding: 16px;
+      height: calc(100vh - 64px);
+    }
+
+    .panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--rad);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--text-main);
+    }
+
+    .panel-body {
+      padding: 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      margin-bottom: 8px;
+      transition: 0.2s;
+      font-size: 0.9rem;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-outline {
+      background: white;
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      text-align: center;
+    }
+
+    .btn-outline:hover {
+      background: #f1f5f9;
+      border-color: var(--primary);
+    }
+
+    .btn-outline.selected {
+      background: #e0f2fe;
+      border-color: var(--primary);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .btn-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .dataset-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .dataset-row .btn-outline {
+      padding: 8px 4px;
+      margin-bottom: 0;
+      flex: 1;
+      font-size: 0.85rem;
+    }
+
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .radio-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .radio-item input {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    /* Viz Elements */
+    .chart-container {
+      height: 350px;
+      width: 100%;
+      display: none;
+      position: relative;
+    }
+
+    .memory-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .ref-array {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .ref-item {
+      padding: 6px 12px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 1.1rem;
+      font-weight: bold;
+      transition: all 0.2s ease;
+    }
+
+    .alert-banner {
+      display: none;
+      background: var(--danger);
+      color: white;
+      text-align: center;
+      padding: 12px;
+      border-radius: 6px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+      animation: flash 1s infinite alternate;
+    }
+
+    @keyframes flash {
+      from {
+        opacity: 1;
+      }
+
+      to {
+        opacity: 0.8;
+      }
+    }
+
+    .scrolling-refs {
+      max-height: 140px;
+      overflow-y: auto;
+      padding-right: 8px;
+      align-content: flex-start;
+    }
+
+    .scrolling-refs::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .scrolling-refs::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stat-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .stat-val {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    .stat-lbl {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-top: 4px;
+      line-height: 1.2;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    th,
+    td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background: #f8fafc;
+      color: var(--text-muted);
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <h1>OS Lab: Thrashing Visualizer</h1>
+    <div id="header-badge"
+      style="font-weight: 700; color: var(--primary); background: #e0f2fe; padding: 6px 12px; border-radius: 4px;">Mode:
+      Working Set</div>
+  </header>
+
+  <div id="dashboard">
+    <div class="panel">
+      <div class="panel-header">1. Configuration</div>
+      <div class="panel-body">
+
+        <div class="form-group">
+          <span class="form-label">Select Process Dataset</span>
+          <div class="dataset-row">
+            <button class="btn btn-outline" id="ds-btn-0" onclick="loadDataset('P1.csv', 0, 'P1')">P1</button>
+            <button class="btn btn-outline" id="ds-btn-1" onclick="loadDataset('P2.csv', 1, 'P2')">P2</button>
+            <button class="btn btn-outline" id="ds-btn-2" onclick="loadDataset('P3.csv', 2, 'P3')">P3</button>
+            <button class="btn btn-outline" id="ds-btn-3" onclick="loadDataset('P4.csv', 3, 'P4')">P4</button>
+            <button class="btn btn-outline" id="ds-btn-4" onclick="loadDataset('P5.csv', 4, 'P5')">P5</button>
+          </div>
+          <div id="ds-status" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; font-weight: 700;">No
+            file loaded yet.</div>
+        </div>
+
+        <div class="form-group">
+          <span class="form-label">Algorithm Selection</span>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="algo" value="ws" checked onchange="toggleAlgoMode()"> Working Set Model
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="algo" value="pff" onchange="toggleAlgoMode()"> Page Fault Frequency
+            </label>
+          </div>
+        </div>
+
+        <div id="pff-bounds"
+          style="display: none; background: #f8fafc; padding: 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 20px;">
+          <div class="form-group" style="margin-bottom: 10px;">
+            <span class="form-label">Upper Bound (Max PF)</span>
+            <input type="number" id="pff-upper" value="80" onchange="updateBoundsOnChart()">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <span class="form-label">Lower Bound (Min PF)</span>
+            <input type="number" id="pff-lower" value="20" onchange="updateBoundsOnChart()">
+          </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+
+        <button class="btn btn-primary" onclick="simulate()" style="text-align: center;">▶ Start Simulation</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-danger" onclick="stopSim()" style="text-align: center; margin-bottom: 0;">⏹
+            Stop</button>
+          <button class="btn btn-outline" onclick="resetSim()"
+            style="text-align: center; margin-bottom: 0; justify-content: center;">↺ Reset</button>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">2. Live Visualization</div>
+      <div class="panel-body">
+
+        <div id="thrashing-alert" class="alert-banner">
+          ⚠️ SYSTEM THRASHING DETECTED ⚠️
+        </div>
+
+        <div class="btn-controls" id="load-controls" style="display: none;">
+          <button class="btn btn-outline" onclick="adjustLoad(1)"
+            style="text-align: center; border-color: var(--text-muted); font-weight: 700;">➕ Increase Load</button>
+          <button class="btn btn-outline" onclick="adjustLoad(-1)"
+            style="text-align: center; border-color: var(--text-muted); font-weight: 700;">➖ Decrease Load</button>
+        </div>
+
+        <div id="ws-view">
+          <div class="memory-box">
+            <span class="form-label">1. All Processed References</span>
+            <div class="ref-array scrolling-refs" id="all-references">
+              <span class="ref-item" style="color:var(--text-muted); border-style: dashed;">Select process &
+                start...</span>
+            </div>
+          </div>
+
+          <div class="memory-box">
+            <span class="form-label" id="ws-countdown">2. 10 Last Unique References (Evaluates every 10s)...</span>
+            <div class="ref-array" id="working-set" style="min-height: 48px;">
+              <span class="ref-item" style="color:var(--text-muted); border-style: dashed;">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-container" id="pff-view">
+          <canvas id="pffChart"></canvas>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">3. Output Log</div>
+      <div class="panel-body">
+        <div class="stat-grid">
+          <div class="stat-card" id="card-load">
+            <div class="stat-val" id="stat-load">1</div>
+            <div class="stat-lbl">System Load</div>
+          </div>
+          <div class="stat-card" id="card-cpu">
+            <div class="stat-val" id="stat-cpu">100%</div>
+            <div class="stat-lbl">CPU Util.<br><span style="font-size: 0.6rem; color: var(--danger);">(by Page
+                Fault)</span></div>
+          </div>
+        </div>
+
+        <span class="form-label">Live Reference Log</span>
+        <div style="height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px;">
+          <table id="log-table">
+            <thead>
+              <tr>
+                <th>Ref</th>
+                <th>Status</th>
+                <th>Process</th>
+              </tr>
+            </thead>
+            <tbody id="log-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- State Variables ---
+    let activeDataset = [];
+    let activeProcessName = "None";
+    let simInterval = null;
+    let tick = 0;
+    let currentLoad = 1;
+
+    let myChart = null;
+    let chartLabels = []; // Time (Ticks)
+    let pfData = [];      // Page Fault Rate
+    let upperData = [];   // Upper Bound Line
+    let lowerData = [];   // Lower Bound Line
+
+    // --- FETCH Local CSV File ---
+    async function loadDataset(filename, btnIdx, processName) {
+      const statusBox = document.getElementById('ds-status');
+
+      for (let i = 0; i < 5; i++) {
+        document.getElementById(`ds-btn-${i}`).classList.remove('selected');
+      }
+      document.getElementById(`ds-btn-${btnIdx}`).classList.add('selected');
+
+      try {
+        const response = await fetch(filename);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const text = await response.text();
+
+        const lines = text.split('\n');
+        activeDataset = [];
+        for (let i = 0; i < lines.length; i++) {
+          const val = parseInt(lines[i].trim());
+          if (!isNaN(val)) activeDataset.push(val);
+        }
+
+        if (activeDataset.length > 0) {
+          activeProcessName = processName;
+          statusBox.innerText = `✅ Loaded ${filename} (${activeDataset.length} refs)`;
+          statusBox.style.color = 'var(--success)';
+          resetSim();
+        } else {
+          throw new Error("No valid numbers found.");
+        }
+      } catch (error) {
+        console.error("Fetch Error:", error);
+        statusBox.innerText = `❌ Error reading ${filename}. Ensure you are running a local server.`;
+        statusBox.style.color = 'var(--danger)';
+      }
+    }
+
+    // --- UI Interactions ---
+    function toggleAlgoMode() {
+      const algo = document.querySelector('input[name="algo"]:checked').value;
+      const pffBounds = document.getElementById('pff-bounds');
+      const wsView = document.getElementById('ws-view');
+      const pffView = document.getElementById('pff-view');
+      const loadControls = document.getElementById('load-controls');
+
+      if (algo === 'pff') {
+        pffBounds.style.display = 'block';
+        wsView.style.display = 'none';
+        pffView.style.display = 'block';
+        loadControls.style.display = 'grid';
+        document.getElementById('header-badge').innerText = "Mode: Page Fault Frequency";
+
+        if (!myChart) initChart();
+        else myChart.resize();
+
+      } else {
+        pffBounds.style.display = 'none';
+        wsView.style.display = 'block';
+        pffView.style.display = 'none';
+        loadControls.style.display = 'none';
+        document.getElementById('header-badge').innerText = "Mode: Working Set";
+      }
+    }
+
+    function updateBoundsOnChart() {
+      if (myChart && myChart.data.labels.length > 0) {
+        const upper = parseInt(document.getElementById('pff-upper').value);
+        const lower = parseInt(document.getElementById('pff-lower').value);
+        // Update existing arrays so straight lines adjust live
+        for (let i = 0; i < upperData.length; i++) {
+          upperData[i] = upper;
+          lowerData[i] = lower;
+        }
+        myChart.update();
+      }
+    }
+
+    // --- THE POLISHED CHART INITIALIZATION ---
+    function initChart() {
+      const ctx = document.getElementById('pffChart').getContext('2d');
+      myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: chartLabels,
+          datasets: [
+            {
+              label: 'Page Fault Rate',
+              borderColor: '#dc2626', // Danger Red
+              backgroundColor: 'rgba(220, 38, 38, 0.15)', // Light red fill
+              data: pfData,
+              fill: true,
+              tension: 0.3,
+              borderWidth: 3
+            },
+            {
+              label: 'Upper Bound (Max PF)',
+              borderColor: '#f97316', // Orange
+              backgroundColor: 'transparent',
+              data: upperData,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              borderWidth: 2,
+              fill: false
+            },
+            {
+              label: 'Lower Bound (Min PF)',
+              borderColor: '#16a34a', // Green
+              backgroundColor: 'transparent',
+              data: lowerData,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              borderWidth: 2,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 200 },
+          plugins: {
+            legend: { position: 'top', labels: { font: { weight: 'bold' } } }
+          },
+          scales: {
+            x: {
+              title: { display: true, text: 'Time (Simulation Ticks)', font: { weight: 'bold' } },
+              grid: { display: false }
+            },
+            y: {
+              type: 'linear',
+              min: 0,
+              max: 100,
+              title: { display: true, text: 'Page Fault Frequency', font: { weight: 'bold', color: '#333' } }
+            }
+          }
+        }
+      });
+    }
+
+    // --- Core Simulation Controls ---
+    function simulate() {
+      if (activeDataset.length === 0) {
+        alert("Please select a valid CSV dataset first.");
+        return;
+      }
+      if (simInterval) return;
+
+      const algo = document.querySelector('input[name="algo"]:checked').value;
+
+      simInterval = setInterval(() => {
+        if (tick >= activeDataset.length) { stopSim(); return; }
+        if (algo === 'ws') runWorkingSetLogic(tick);
+        else runPFFLogic(tick);
+        tick++;
+      }, 1000);
+    }
+
+    function stopSim() {
+      clearInterval(simInterval);
+      simInterval = null;
+    }
+
+    function resetSim() {
+      stopSim();
+      tick = 0;
+      currentLoad = 1;
+
+      chartLabels.length = 0;
+      pfData.length = 0;
+      upperData.length = 0;
+      lowerData.length = 0;
+
+      if (myChart) myChart.update();
+
+      document.getElementById('stat-load').innerText = 1;
+      document.getElementById('stat-cpu').innerText = "100%";
+      document.getElementById('thrashing-alert').style.display = 'none';
+      document.getElementById('log-body').innerHTML = "";
+      document.getElementById('ws-countdown').innerText = "2. 10 Last Unique References (Evaluates every 10s)...";
+      document.getElementById('all-references').innerHTML = '<span class="ref-item" style="color:var(--text-muted); border-style: dashed;">Select process & start...</span>';
+      document.getElementById('working-set').innerHTML = '<span class="ref-item" style="color:var(--text-muted); border-style: dashed;">—</span>';
+    }
+
+    function adjustLoad(delta) {
+      currentLoad = Math.max(1, currentLoad + delta);
+      document.getElementById('stat-load').innerText = currentLoad;
+    }
+
+    // --- Logic: Working Set ---
+    function runWorkingSetLogic(currentIdx) {
+      const currentRef = activeDataset[currentIdx];
+      const allRefsContainer = document.getElementById('all-references');
+
+      const prevStart = Math.max(0, currentIdx - 10);
+      const prevWindow = activeDataset.slice(prevStart, currentIdx);
+
+      let statusStr = "MISS";
+      if (prevWindow.includes(currentRef)) statusStr = "HIT";
+
+      logAction(currentRef, statusStr, activeProcessName);
+
+      if (currentIdx === 0) allRefsContainer.innerHTML = '';
+
+      const borderColor = statusStr === "MISS" ? "var(--danger)" : "var(--success)";
+      const fontColor = statusStr === "MISS" ? "var(--danger)" : "var(--success)";
+
+      allRefsContainer.innerHTML += `<span class="ref-item" style="color: ${fontColor}; border-color: ${borderColor};">${currentRef}</span>`;
+      allRefsContainer.scrollTop = allRefsContainer.scrollHeight;
+
+      let secondsLeft = 10 - (currentIdx % 10) - 1;
+      if (secondsLeft > 0) {
+        document.getElementById('ws-countdown').innerText = `2. 10 Last Unique References (Evaluates in ${secondsLeft}s...)`;
+      }
+
+      if ((currentIdx + 1) % 10 === 0) {
+        document.getElementById('ws-countdown').innerText = `2. 10 Last Unique References (Evaluated!)`;
+
+        const historySoFar = activeDataset.slice(0, currentIdx + 1);
+        const last10Unique = [];
+        for (let i = historySoFar.length - 1; i >= 0; i--) {
+          if (!last10Unique.includes(historySoFar[i])) last10Unique.unshift(historySoFar[i]);
+          if (last10Unique.length === 10) break;
+        }
+
+        document.getElementById('working-set').innerHTML = last10Unique.map(r =>
+          `<span class="ref-item" style="color: white; background: var(--primary); border-color: var(--primary);">${r}</span>`
+        ).join('');
+
+        const windowRefs = activeDataset.slice(currentIdx - 9, currentIdx + 1);
+        const actualRecentUniqueCount = new Set(windowRefs).size;
+        const isThrashing = actualRecentUniqueCount > 5;
+
+        document.getElementById('thrashing-alert').style.display = isThrashing ? 'block' : 'none';
+        document.getElementById('stat-cpu').innerText = isThrashing ? "12%" : "98%";
+
+        if (isThrashing) logAction("SYS", "THRASHING WARNING", activeProcessName);
+      }
+    }
+
+    // --- Logic: Page Fault Frequency ---
+    function runPFFLogic(currentIdx) {
+      const upper = parseInt(document.getElementById('pff-upper').value);
+      const lower = parseInt(document.getElementById('pff-lower').value);
+
+      let simulatedPFRate = (currentLoad * 12) + Math.floor(Math.random() * 15);
+      let simulatedCpu = 100 - (simulatedPFRate * 0.7);
+
+      let status = "Stable";
+      if (simulatedPFRate > upper) {
+        status = "Above Max Bound";
+        document.getElementById('thrashing-alert').style.display = 'block';
+        simulatedCpu = Math.max(5, simulatedCpu - 40);
+      } else if (simulatedPFRate < lower) {
+        status = "Below Min Bound";
+        document.getElementById('thrashing-alert').style.display = 'none';
+      } else {
+        document.getElementById('thrashing-alert').style.display = 'none';
+      }
+
+      // Update time-series logic
+      chartLabels.push(tick);
+      pfData.push(simulatedPFRate);
+      upperData.push(upper);
+      lowerData.push(lower);
+
+      // Keep the graph scrolling (last 30 ticks)
+      if (chartLabels.length > 30) {
+        chartLabels.shift();
+        pfData.shift();
+        upperData.shift();
+        lowerData.shift();
+      }
+
+      myChart.update();
+
+      document.getElementById('stat-cpu').innerText = `${simulatedCpu.toFixed(1)}%`;
+
+      const currentRef = activeDataset[currentIdx];
+      logAction(currentRef, status, activeProcessName);
+    }
+
+    // --- Global Logger ---
+    function logAction(ref, status, process) {
+      const tbody = document.getElementById('log-body');
+      let colorStyle = "";
+
+      if (status.includes("MISS") || status.includes("Above") || status.includes("THRASHING")) {
+        colorStyle = "color: var(--danger); font-weight: 700;";
+      } else if (status.includes("HIT") || status.includes("Stable")) {
+        colorStyle = "color: var(--success); font-weight: 700;";
+      } else {
+        colorStyle = "color: var(--text-muted);";
+      }
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><strong>${ref}</strong></td> <td style="${colorStyle}">${status}</td> <td><span style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; font-weight: 700;">${process}</span></td>`;
+      tbody.insertBefore(tr, tbody.firstChild);
+
+      if (tbody.children.length > 30) tbody.removeChild(tbody.lastChild);
+    }
+  </script>
+</body>
+
+</html>
