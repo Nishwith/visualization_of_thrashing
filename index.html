@@ -408,7 +408,8 @@
           </div>
 
           <div class="memory-box">
-<span class="form-label" id="ws-countdown">2. Current Working Set (Window size: 10)...</span>            <div class="ref-array" id="working-set" style="min-height: 48px;">
+            <span class="form-label" id="ws-countdown">2. Current Working Set (Window size: 10)...</span>
+            <div class="ref-array" id="working-set" style="min-height: 48px;">
               <span class="ref-item" style="color:var(--text-muted); border-style: dashed;">—</span>
             </div>
           </div>
@@ -644,7 +645,8 @@
       document.getElementById('stat-cpu').innerText = "100%";
       document.getElementById('thrashing-alert').style.display = 'none';
       document.getElementById('log-body').innerHTML = "";
-document.getElementById('ws-countdown').innerText = "2. Current Working Set (Window size: 10)...";      document.getElementById('all-references').innerHTML = '<span class="ref-item" style="color:var(--text-muted); border-style: dashed;">Select process & start...</span>';
+      document.getElementById('ws-countdown').innerText = "2. Current Working Set (Window size: 10)...";
+      document.getElementById('all-references').innerHTML = '<span class="ref-item" style="color:var(--text-muted); border-style: dashed;">Select process & start...</span>';
       document.getElementById('working-set').innerHTML = '<span class="ref-item" style="color:var(--text-muted); border-style: dashed;">—</span>';
     }
 
@@ -676,22 +678,20 @@ document.getElementById('ws-countdown').innerText = "2. Current Working Set (Win
 
       let secondsLeft = 10 - (currentIdx % 10) - 1;
       if (secondsLeft > 0) {
-document.getElementById('ws-countdown').innerText = `2. Current Working Set (Evaluates in ${secondsLeft}s...)`;      }
+        document.getElementById('ws-countdown').innerText = `2. Current Working Set (Evaluates in ${secondsLeft}s...)`;
+      }
 
       if ((currentIdx + 1) % 10 === 0) {
-document.getElementById('ws-countdown').innerText = `2. Current Working Set (Evaluated!)`;
-// Look only at the current 10-item window, just like the Hit/Miss logic
-const windowRefs = activeDataset.slice(Math.max(0, currentIdx - 9), currentIdx + 1);
+        document.getElementById('ws-countdown').innerText = `2. Current Working Set (Evaluated!)`;
 
-// Extract only the unique numbers from this specific window
-const uniqueInWindow = [...new Set(windowRefs)];
+        const windowRefs = activeDataset.slice(Math.max(0, currentIdx - 9), currentIdx + 1);
+        const uniqueInWindow = [...new Set(windowRefs)];
 
-document.getElementById('working-set').innerHTML = uniqueInWindow.map(r =>
-  `<span class="ref-item" style="color: white; background: var(--primary); border-color: var(--primary);">${r}</span>`
-).join('');
+        document.getElementById('working-set').innerHTML = uniqueInWindow.map(r =>
+          `<span class="ref-item" style="color: white; background: var(--primary); border-color: var(--primary);">${r}</span>`
+        ).join('');
 
-        const windowRefs = activeDataset.slice(currentIdx - 9, currentIdx + 1);
-        const actualRecentUniqueCount = new Set(windowRefs).size;
+        const actualRecentUniqueCount = uniqueInWindow.length;
         const isThrashing = actualRecentUniqueCount > 5;
 
         document.getElementById('thrashing-alert').style.display = isThrashing ? 'block' : 'none';
