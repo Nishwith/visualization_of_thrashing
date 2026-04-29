@@ -684,16 +684,15 @@
       if ((currentIdx + 1) % 10 === 0) {
         document.getElementById('ws-countdown').innerText = `2. 10 Last Unique References (Evaluated!)`;
 
-        const historySoFar = activeDataset.slice(0, currentIdx + 1);
-        const last10Unique = [];
-        for (let i = historySoFar.length - 1; i >= 0; i--) {
-          if (!last10Unique.includes(historySoFar[i])) last10Unique.unshift(historySoFar[i]);
-          if (last10Unique.length === 10) break;
-        }
+// Look only at the current 10-item window, just like the Hit/Miss logic
+const windowRefs = activeDataset.slice(Math.max(0, currentIdx - 9), currentIdx + 1);
 
-        document.getElementById('working-set').innerHTML = last10Unique.map(r =>
-          `<span class="ref-item" style="color: white; background: var(--primary); border-color: var(--primary);">${r}</span>`
-        ).join('');
+// Extract only the unique numbers from this specific window
+const uniqueInWindow = [...new Set(windowRefs)];
+
+document.getElementById('working-set').innerHTML = uniqueInWindow.map(r =>
+  `<span class="ref-item" style="color: white; background: var(--primary); border-color: var(--primary);">${r}</span>`
+).join('');
 
         const windowRefs = activeDataset.slice(currentIdx - 9, currentIdx + 1);
         const actualRecentUniqueCount = new Set(windowRefs).size;
